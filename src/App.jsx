@@ -10,7 +10,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+// No changes to imports...
+
 export default function KanbanBoard() {
+  // Same state as before...
   const [tasks, setTasks] = useState({});
   const [draggedTask, setDraggedTask] = useState(null);
   const [addTask, setAddTask] = useState({ add: false, column: "" });
@@ -19,6 +22,7 @@ export default function KanbanBoard() {
   const [editedText, setEditedText] = useState("");
   const [newColumnName, setNewColumnName] = useState("");
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [mobileTaskMove, setMobileTaskMove] = useState(null); // mobile fallback
 
   useEffect(() => {
     const stored = localStorage.getItem("kanban-tasks-v2");
@@ -91,9 +95,10 @@ export default function KanbanBoard() {
     setNewColumnName("");
   };
 
-  const handleDragStart = (task, column) => {
-    setDraggedTask({ task, column });
-  };
+ const handleDragStart = (e, task, column) => {
+   e.dataTransfer.setData("text/plain", JSON.stringify({ task, column }));
+   setDraggedTask({ task, column });
+ };
 
   const handleDrop = (targetColumn) => {
     if (!draggedTask) return;
@@ -119,27 +124,75 @@ export default function KanbanBoard() {
     return baseColors[column] || "text-gray-500";
   };
 
+  const moveMobileTask = (targetColumn) => {
+    const { task, column } = mobileTaskMove;
+    if (column === targetColumn) return;
+
+    setTasks((prev) => {
+      const updated = { ...prev };
+      updated[column] = updated[column].filter((t) => t.id !== task.id);
+      updated[targetColumn] = [...updated[targetColumn], task];
+      return updated;
+    });
+
+    setMobileTaskMove(null);
+  };
+
+
   return (
-    <div className="min-h-screen w-full bg-gray-100 p-6 font-sans">
-      {/* Add Column Form */}
+    <div className="min-h-screen w-full bg-gray-100 p-4 font-sans">
+      {/* Add Column */}
       <form
         onSubmit={handleAddColumn}
-        className="flex gap-2 items-center bg-white shadow-sm rounded-lg p-4 max-w-xl mx-auto mb-6 border"
+        className="flex gap-2 items-center bg-white shadow-sm rounded-lg p-3 border w-full max-w-xl mx-auto mb-6 overflow-hidden"
       >
         <input
           type="text"
-          placeholder="New Column"
+          placeholder="New Column Name"
           value={newColumnName}
           onChange={(e) => setNewColumnName(e.target.value)}
-          className="flex-1 border border-gray-300 px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
+          className="flex-1 min-w-0 border border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400 text-sm"
         />
         <button
           type="submit"
-          className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition font-semibold"
+          className="flex items-center gap-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition font-semibold relative group whitespace-nowrap"
         >
-          Add Column
+          <CirclePlus className="w-4 h-4" />
+          <span className="hidden sm:inline">Create</span>
+          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gray-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition pointer-events-none">
+            Create Column
+          </span>
         </button>
       </form>
+
+      {/* Mobile drag fallback */}
+      {mobileTaskMove && (
+        <div className="fixed z-50 inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white p-4 rounded shadow-md max-w-sm w-full">
+            <h3 className="font-semibold mb-2 text-center">Move task to:</h3>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {Object.keys(tasks)
+                .filter((col) => col !== mobileTaskMove?.column)
+                .map((col) => (
+                  <button
+                    key={col}
+                    onClick={() => moveMobileTask(col)}
+                    className="bg-blue-500 text-white px-4 py-1 rounded hover:bg-blue-600"
+                  >
+                    {col}
+                  </button>
+                ))}
+            </div>
+
+            <button
+              onClick={() => setMobileTaskMove(null)}
+              className="mt-4 text-sm text-gray-500 hover:text-black w-full"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Columns Grid */}
       <div className="w-full max-w-screen-2xl mx-auto px-4 grid gap-6 grid-cols-[repeat(auto-fit,minmax(204px,1fr))]">
@@ -175,8 +228,11 @@ export default function KanbanBoard() {
                 <Card
                   key={task.id}
                   draggable
-                  onDragStart={() => handleDragStart(task, column)}
-                  className="relative p-4 pb-10 border-gray-600 shadow-sm bg-white text-black cursor-grab hover:shadow-md border-2 rounded-md transition"
+                  onDragStart={(e) => handleDragStart(e, task, column)}
+                  onTouchStart={() => setMobileTaskMove({ task, column })}
+                  className={`relative p-4 pb-10 border-gray-600 shadow-sm bg-white text-black cursor-grab hover:shadow-md border rounded-md transition ${
+                    draggedTask?.task?.id === task.id ? "bg-gray-200" : ""
+                  }`}
                 >
                   {/* Label */}
                   <div
@@ -218,6 +274,7 @@ export default function KanbanBoard() {
                   {/* Footer Buttons */}
                   <div className="absolute bottom-2 right-2 flex gap-2 text-gray-600">
                     <Edit
+                      title="Edit task"
                       className="w-4 h-4 cursor-pointer hover:text-black"
                       onClick={() => {
                         setEditingTask(task);
@@ -225,6 +282,7 @@ export default function KanbanBoard() {
                       }}
                     />
                     <Trash
+                      title="Delete task"
                       className="w-4 h-4 cursor-pointer hover:text-red-500"
                       onClick={() => handleDeleteTask(column, task.id)}
                     />
